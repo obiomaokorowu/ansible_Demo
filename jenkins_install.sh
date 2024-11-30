@@ -1,6 +1,7 @@
-#!/bin/sh
+#!bin/bash
+
 sudo apt update
-sudo apt install openjdk-11-jdk -y
+sudo apt install openjdk-17-jdk -y
 sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5BA31D57EF5975CA
 wget -q -O - https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo apt-key add -
 sudo sh -c 'echo deb http://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'
@@ -12,7 +13,8 @@ sudo apt install ansible -y
 sudo sh -c 'echo deb https://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'
 sudo apt update
 sudo apt install jenkins -y
-sudo apt-get update 
+sudo apt-get update -y
+sudo apt-get update
 wget -O- https://apt.releases.hashicorp.com/gpg | \
     gpg --dearmor | \
     sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
@@ -28,13 +30,19 @@ sudo apt-get install apt-transport-https ca-certificates curl gnupg-agent softwa
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 sudo apt-key fingerprint 0EBFCD88
-sudo apt-get update 
+sudo apt-get update -y
 sudo apt-get install docker-ce docker-ce-cli containerd.io -y
-sudo usermod -aG docker jenkins
-sudo usermod -aG docker ubuntu
-sudo usermod -aG docker $USER
-
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+sudo apt-get install -y apt-transport-https
+sudo apt install apt-transport-https curl -y
+sudo curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add
+echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" >> ~/kubernetes.list
+sudo mv ~/kubernetes.list /etc/apt/sources.list.d
+sudo apt-get update -y
+sudo apt install kubectl -y
 sudo apt install awscli -y
 wget https://get.helm.sh/helm-v3.2.4-linux-amd64.tar.gz
 tar -zxvf helm-v3.2.4-linux-amd64.tar.gz
 sudo mv linux-amd64/helm /usr/local/bin/helm
+snap install kubectl --classic -y
