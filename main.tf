@@ -1,48 +1,180 @@
-#!bin/bash
+# configured aws provider with proper credentials
+provider "aws" {
+  region    = "us-east-2"
+  shared_config_files      = ["/Users/austi/.aws/conf"]
+  shared_credentials_files = ["/Users/austi/.aws/credentials"]
 
-sudo apt update
-sudo apt install openjdk-17-jdk -y
-sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 5BA31D57EF5975CA
-wget -q -O - https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo apt-key add -
-sudo sh -c 'echo deb http://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'
-sudo apt install ca-certificates
-sudo apt update
-sudo apt install git -y
-sudo apt install maven -y
-sudo apt install ansible -y
-sudo sh -c 'echo deb https://pkg.jenkins.io/debian-stable binary/ > /etc/apt/sources.list.d/jenkins.list'
-sudo apt update
-sudo apt install jenkins -y
-sudo apt-get update -y
-sudo apt-get update
-wget -O- https://apt.releases.hashicorp.com/gpg | \
-    gpg --dearmor | \
-    sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-gpg --no-default-keyring \
-    --keyring /usr/share/keyrings/hashicorp-archive-keyring.gpg \
-    --fingerprint
-echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
-    https://apt.releases.hashicorp.com $(lsb_release -cs) main" | \
-    sudo tee /etc/apt/sources.list.d/hashicorp.list
-sudo apt update
-sudo apt install terraform -y
-sudo apt-get install apt-transport-https ca-certificates curl gnupg-agent software-properties-common -y
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-sudo apt-key fingerprint 0EBFCD88
-sudo apt-get update -y
-sudo apt-get install docker-ce docker-ce-cli containerd.io -y
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl
-sudo apt-get install -y apt-transport-https
-sudo apt install apt-transport-https curl -y
-sudo curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add
-echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" >> ~/kubernetes.list
-sudo mv ~/kubernetes.list /etc/apt/sources.list.d
-sudo apt-get update -y
-sudo apt install kubectl -y
-sudo apt install awscli -y
-wget https://get.helm.sh/helm-v3.2.4-linux-amd64.tar.gz
-tar -zxvf helm-v3.2.4-linux-amd64.tar.gz
-sudo mv linux-amd64/helm /usr/local/bin/helm
-snap install kubectl --classic -y
+  profile                  = "austin"
+
+}
+
+# Create a remote backend for your terraform 
+terraform {
+  backend "s3" {
+    bucket = "may-class-devops-austin"
+    region = "us-east-1"
+    profile = "austin"
+    key    = "ansible-ftstate"
+
+  }
+}
+
+
+# create default vpc if one does not exit
+resource "aws_default_vpc" "default_vpc" {
+
+  tags    = {
+    Name  = "default vpc"
+  }
+}
+
+
+# use data source to get all avalablility zones in region
+data "aws_availability_zones" "available_zones" {}
+
+
+# create default subnet if one does not exit
+resource "aws_default_subnet" "default_az1" {
+  availability_zone = data.aws_availability_zones.available_zones.names[0]
+
+  tags   = {
+    Name = "default subnet"
+}
+}
+
+
+# create security group for the ec2 instance
+resource "aws_security_group" "ec2_security_group" {
+  name        = "ec2 security group"
+  description = "allow access on ports 8080 and 22"
+  vpc_id      = aws_default_vpc.default_vpc.id
+
+  # allow access on port 8080
+  ingress {
+    description      = "http proxy access"
+    from_port        = 8080
+    to_port          = 8080
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  # allow access on port 22
+  ingress {
+    description      = "ssh access"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description      = "http proxy-nginx access"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description      = "http nginx access"
+    from_port        = 9090
+    to_port          = 9090
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description      = "mysql access"
+    from_port        = 3306
+    to_port          = 3306
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = -1
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  tags   = {
+    Name = "Ec2-instances security group"
+  }
+}
+
+
+# use data source to get a registered amazon linux 2 ami
+data "aws_ami" "ubuntu" {
+
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  owners = ["099720109477"]
+}
+
+# launch the ec2 instance and install website
+
+resource "aws_instance" "ec2_instance1" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t2.small"
+  subnet_id              = aws_default_subnet.default_az1.id
+  vpc_security_group_ids = [aws_security_group.ec2_security_group.id]
+  key_name               = "may_key"
+  user_data            = "${file("jenkins_install.sh")}"
+
+  tags = {
+    Name = "Jenkins-Ansible-Server"
+
+  }
+}
+
+resource "aws_instance" "ec2_instance2" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t2.micro"
+  subnet_id              = aws_default_subnet.default_az1.id
+  vpc_security_group_ids = [aws_security_group.ec2_security_group.id]
+  key_name               = "may_key"
+
+  tags = {
+    Name = "Database-server"
+  }
+}
+
+resource "aws_instance" "ec2_instance3" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t2.micro"
+  subnet_id              = aws_default_subnet.default_az1.id
+  vpc_security_group_ids = [aws_security_group.ec2_security_group.id]
+  key_name               = "may_key"
+
+  tags = {
+    Name = "Nginx-Server"
+  }
+}
+
+resource "aws_instance" "ec2_instance4" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = "t2.micro"
+  subnet_id              = aws_default_subnet.default_az1.id
+  vpc_security_group_ids = [aws_security_group.ec2_security_group.id]
+  key_name               = "may_key"
+
+  tags = {
+    Name = "Apache-Server"
+  }
+}
+
+#output "ec2_global_ips" {
+#  value = ["${aws_instance.ec2_instance1.*.public_ip}"]
+#  value = ["${}"]
+#}
