@@ -1,0 +1,29 @@
+name: Ansible CI
+
+on:
+  push:
+    branches: ["prod"]
+
+jobs:
+  ansible_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Set up SSH key
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ansible
+
+      - name: Run Ansible Playbook
+        run: |
+          ansible-playbook -i hosts ansible_playbook.yaml --ssh-extra-args='-o StrictHostKeyChecking=no'
+
+      - name: Print Installation Is Complete
+        run: echo 'Your Installation Was Successful On All Servers'
