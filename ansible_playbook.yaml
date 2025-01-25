@@ -13,7 +13,7 @@
         name: nginx
         state: started
         enabled: yes
-
+---
 - name: PlayBook 2 - MySQL Setup
   hosts: Database-Servers
   become: true
@@ -62,7 +62,7 @@
       service:
         name: mysql
         state: restarted
-
+---
 - name: PlayBook 3 - Apache Setup
   hosts: Apache-Servers
   become: true
